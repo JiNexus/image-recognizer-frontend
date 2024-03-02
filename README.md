@@ -66,3 +66,17 @@ npm run test:e2e
 ```sh
 npm run lint
 ```
+
+## Docker Server
+
+Development
+
+```bash
+docker-compose -f .docker/development/docker-compose.yml up --build --remove-orphans
+```
+
+Production
+
+```bash
+docker-compose -f .docker/production/docker-compose.yml up --build --remove-orphans
+```

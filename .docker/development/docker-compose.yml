@@ -1,0 +1,22 @@
+version: '3.9'
+
+networks:
+    recursive-network:
+
+services:
+    recursive-frontend-development:
+        build:
+            context: ../../
+            dockerfile: .docker/development/Dockerfile.dev
+        container_name: recursive-frontend
+        image: recursive-frontend:development
+        ports:
+            - '7001:7001'
+        extra_hosts:
+            - 'host.docker.internal:host-gateway'
+        volumes:
+            - ../../:/app
+        environment:
+            - NODE_ENV=development
+        networks:
+            - recursive-network
