@@ -7,9 +7,11 @@ export default {
     name: 'ImageRecognizerForm',
     setup() {
         let image = ref();
+        let objects = ref();
 
         return {
             image,
+            objects,
         };
     },
     data() {
@@ -18,7 +20,34 @@ export default {
         }
     },
     methods: {
+        async clearCanvas(canvasString: string) {
+            const canvas = document.getElementById(canvasString) as HTMLCanvasElement;
+            const ctx = canvas.getContext('2d');
+
+            const image = new Image();
+            let width = 480;
+            let height = 480;
+
+            // Set canvas dimensions to match resized image dimensions
+            canvas.width = width;
+            canvas.height = height;
+
+            // Clear previous content
+            ctx?.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw the resized image on the canvas
+            ctx?.drawImage(image, 0, 0, width, height);
+        },
+        async clearObjects() {
+            this.objects = new Array();
+        },
         async handleFileChange(event: any) {
+            // Clear canvas output
+            this.clearCanvas('canvas-output');
+
+            // Clear objects
+            this.clearObjects();
+
             // Retrieve the selected file
             const file = event.target.files[0];
 
@@ -81,12 +110,13 @@ export default {
                 ctx: ctx
             };
         },
-        async processImage() {
+        async detectImage() {
             await axios.post('http://localhost:7000/api/image-recognizer', { imageData: this.imageData })
             .then(async response => {
                 console.log('Image uploaded successfully:', response);
                 const loadImageToCanvas = await this.loadImageToCanvas('canvas-output');
 
+                this.objects = new Array();
                 for (let i = 0; i < response.data.length; i++) {
                     let object = response.data[i];
 
@@ -102,12 +132,15 @@ export default {
                         loadImageToCanvas.ctx.lineWidth = 4;
                         loadImageToCanvas.ctx?.stroke();
                     }
+
+                    this.objects.push(object);
+                    console.log(this.objects);
                 }
             })
             .catch(error => {
                 console.error('Error uploading image:', error);
             });
-        }
+        },
     }
 }
 </script>
@@ -128,8 +161,8 @@ export default {
             </div>
             <div class="col-lg-10 mx-auto mb-2">
                 <div class="d-grid gap-2">
-                    <button @click="processImage" type="submit" class="btn btn-primary btn-lg px-5 mt-2 mb-2" name="btn-upload">
-                        Process <font-awesome-icon icon="fa-solid fa-bolt-lightning" />
+                    <button @click="detectImage" type="submit" class="btn btn-primary btn-lg px-5 mt-2 mb-2" name="btn-upload">
+                        Detect <font-awesome-icon icon="fa-solid fa-bolt-lightning" />
                     </button>
                 </div>
             </div>
@@ -144,12 +177,13 @@ export default {
             </div>
             <div class="col-lg-10 mx-auto mb-4">
                 <p class="lead">Objects found:</p>
-                <ul class="list-group list-group-flush">
-                    <li class="list-group-item">An item</li>
-                    <li class="list-group-item">A second item</li>
-                    <li class="list-group-item">A third item</li>
-                    <li class="list-group-item">A fourth item</li>
-                    <li class="list-group-item">And a fifth one</li>
+                <ul v-if="objects && objects.length > 0" class="list-group list-group-flush">
+                    <li v-for="(object, index) in objects" :key="index" class="list-group-item">
+                        {{ object.class.charAt(0).toUpperCase() + object.class.slice(1) }}
+                    </li>
+                </ul>
+                <ul v-else class="list-group list-group-flush">
+                    <li class="list-group-item">Looking for something?</li>
                 </ul>
             </div>
         </div>
