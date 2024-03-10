@@ -1,7 +1,8 @@
 <script lang="ts">
-import axios from 'axios';
-import type { CanvasData } from '@/interfaces/CavasData';
 import { ref } from 'vue';
+
+declare const p5: any;
+declare const ml5: any
 
 export default {
     name: 'ImageRecognizerForm',
@@ -16,7 +17,9 @@ export default {
     },
     data() {
         return {
-            imageData: '',
+            imageUrl: 'https://placehold.co/480x480',
+            resizedHeight: 480,
+            resizedWidth: 480,
         }
     },
     methods: {
@@ -37,16 +40,69 @@ export default {
 
             // Draw the resized image on the canvas
             ctx?.drawImage(image, 0, 0, width, height);
+
+            const canvasOutputWrapper = document.getElementById('canvas-output-wrapper') as HTMLElement;
+            canvasOutputWrapper.innerHTML = '';
         },
         async clearObjects() {
             this.objects = new Array();
         },
-        async handleFileChange(event: any) {
-            // Clear canvas output
-            this.clearCanvas('canvas-output');
+        async detect() {
+            new p5((sketch: any) => {
+                let img: HTMLElement | null;
+                let detector: any;
 
+                sketch.preload = () => {
+                    detector = ml5.objectDetector('cocossd');
+                    img = sketch.loadImage(this.imageUrl);
+                };
+
+                sketch.setup = async () => {
+                    sketch.createCanvas(this.resizedWidth, this.resizedHeight);
+
+                    // Pass the canvas element to detect
+                    await detector.detect(img, (error: any, result: any) => {
+                        if (error) {
+                            console.log(error);
+                            return;
+                        }
+
+                        this.objects = result;
+                    });
+                };
+
+                sketch.draw = async () => {
+                    // Draw bounding boxes for detected objects
+                    if (await this.objects.length > 0) {
+                        // Draw the image on the canvas
+                        if (img) {
+                            sketch.image(img, 0, 0, this.resizedWidth, this.resizedHeight);
+                        }
+
+                        for (let i = 0; i < this.objects.length; i++) {
+                            const object = this.objects[i];
+
+                            sketch.stroke(0, 255, 0);
+                            sketch.strokeWeight(4);
+                            sketch.noFill();
+                            sketch.rect(object.x, object.y, object.width, object.height);
+                            sketch.noStroke();
+                            sketch.fill(255);
+                            sketch.textSize(24);
+                            sketch.text(object.label, object.x + 10, object.y + 24);
+                        }
+
+                        sketch.noLoop();
+                    }
+                };
+            }, document.getElementById('canvas-output-wrapper'));
+        },
+        async handleFileChange(event: any) {
             // Clear objects
             this.clearObjects();
+
+            // Clear canvas
+            this.clearCanvas('canvas-input');
 
             // Retrieve the selected file
             const file = event.target.files[0];
@@ -56,90 +112,59 @@ export default {
                 // Read the file as a data URL
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    // Create a new image element
+                    // Create an image element
                     this.image = new Image();
-                    if (typeof e.target?.result === 'string') {
-                        this.image.src = e.target?.result || '';
-                    }
 
-                    // Draw the image on the canvas
                     this.image.onload = async () => {
-                        const loadImageToCanvas = await this.loadImageToCanvas('canvas-input');
+                        // Resize the image
+                        const canvas = await this.resizeCanvas('canvas-input');
+                        this.loadImageToCanvas(canvas);
 
-                        // Save the resized image data for further processing or upload
-                        this.imageData = loadImageToCanvas.canvas.toDataURL();
+                        this.imageUrl = canvas.toDataURL();
                     };
+
+                    // Set the image URL to the data URL
+                    this.image.src = e.target?.result || '';
                 };
 
                 reader.readAsDataURL(file);
             }
         },
-        async loadImageToCanvas(canvasString: string): Promise<CanvasData> {
-            const canvas = document.getElementById(canvasString) as HTMLCanvasElement;
+        async loadImageToCanvas(canvas: HTMLCanvasElement) {
             const ctx = canvas.getContext('2d');
 
-            let resizedWidth = this.image.width;
-            let resizedHeight = this.image.height;
+            // Clear previous content
+            ctx?.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw image on canvas with resized dimensions
+            ctx?.drawImage(this.image, 0, 0, this.resizedWidth, this.resizedHeight);
+        },
+        async resizeCanvas(canvasString: string): Promise<HTMLCanvasElement> {
+            const canvas = document.getElementById(canvasString) as HTMLCanvasElement;
+
+            this.resizedWidth = this.image.width;
+            this.resizedHeight = this.image.height;
             const maxWidth = 480;
             const maxHeight = 480;
 
             // Resize the image if the width exceeds the maximum
             if (this.image.width > this.image.height && this.image.width > maxWidth) {
-                resizedWidth = maxWidth;
-                resizedHeight = (maxWidth / this.image.width) * this.image.height;
+                this.resizedWidth = maxWidth;
+                this.resizedHeight = (maxWidth / this.image.width) * this.image.height;
             }
 
             // Resize the image if the height exceeds the maximum
             if (this.image.height > this.image.width && this.image.height > maxHeight) {
-                resizedHeight = maxHeight;
-                resizedWidth = (maxHeight / this.image.height) * this.image.width;
+                this.resizedHeight = maxHeight;
+                this.resizedWidth = (maxHeight / this.image.height) * this.image.width;
             }
 
             // Set canvas dimensions to match resized image dimensions
-            canvas.width = resizedWidth;
-            canvas.height = resizedHeight;
+            canvas.width = this.resizedWidth;
+            canvas.height = this.resizedHeight;
 
-            // Clear previous content
-            ctx?.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Draw the resized image on the canvas
-            ctx?.drawImage(this.image, 0, 0, resizedWidth, resizedHeight);
-
-            return {
-                canvas: canvas,
-                ctx: ctx
-            };
-        },
-        async detectImage() {
-            await axios.post('http://localhost:7000/api/image-recognizer', { imageData: this.imageData })
-            .then(async response => {
-                console.log('Image uploaded successfully:', response);
-                const loadImageToCanvas = await this.loadImageToCanvas('canvas-output');
-
-                this.objects = new Array();
-                for (let i = 0; i < response.data.length; i++) {
-                    let object = response.data[i];
-
-                    if (loadImageToCanvas.ctx !== null) {
-                        loadImageToCanvas.ctx?.beginPath();
-                        loadImageToCanvas.ctx?.rect(
-                            object.bbox[0],
-                            object.bbox[1],
-                            object.bbox[2],
-                            object.bbox[3]
-                        );
-                        loadImageToCanvas.ctx.strokeStyle = '#00FF00';
-                        loadImageToCanvas.ctx.lineWidth = 4;
-                        loadImageToCanvas.ctx?.stroke();
-                    }
-
-                    this.objects.push(object);
-                    console.log(this.objects);
-                }
-            })
-            .catch(error => {
-                console.error('Error uploading image:', error);
-            });
+            // Return resized image as data URL
+            return canvas;
         },
     }
 }
@@ -150,7 +175,7 @@ export default {
         <div class="col">
             <div class="col-lg-10 mx-auto mb-4">
                 <picture>
-                    <div class="img-thumbnail d-flex flex-wrap align-items-center justify-content-center" style="min-height: 480px; min-width: 480px;">
+                    <div id="canvas-input-wrapper" class="img-thumbnail d-flex flex-wrap align-items-center justify-content-center" style="min-height: 480px; min-width: 480px;">
                         <canvas id="canvas-input" ref="canvas" width="480" height="480"></canvas>
                     </div>
                 </picture>
@@ -161,8 +186,8 @@ export default {
             </div>
             <div class="col-lg-10 mx-auto mb-2">
                 <div class="d-grid gap-2">
-                    <button @click="detectImage" type="submit" class="btn btn-primary btn-lg px-5 mt-2 mb-2" name="btn-upload">
-                        Detect <font-awesome-icon icon="fa-solid fa-bolt-lightning" />
+                    <button @click="detect" type="submit" class="btn btn-primary btn-lg px-5 mt-2 mb-2" name="btn-upload">
+                        Detect <font-awesome-icon icon="fa-solid fa-eye" />
                     </button>
                 </div>
             </div>
@@ -170,16 +195,14 @@ export default {
         <div class="col">
             <div class="col-lg-10 mx-auto mb-4">
                 <picture>
-                    <div class="img-thumbnail d-flex flex-wrap align-items-center justify-content-center" style="min-height: 480px; min-width: 480px;">
-                        <canvas id="canvas-output" ref="canvas" width="480" height="480"></canvas>
-                    </div>
+                    <div id="canvas-output-wrapper" class="img-thumbnail d-flex flex-wrap align-items-center justify-content-center" style="min-height: 480px; min-width: 480px;"></div>
                 </picture>
             </div>
             <div class="col-lg-10 mx-auto mb-4">
                 <p class="lead">Objects found:</p>
                 <ul v-if="objects && objects.length > 0" class="list-group list-group-flush">
                     <li v-for="(object, index) in objects" :key="index" class="list-group-item">
-                        {{ object.class.charAt(0).toUpperCase() + object.class.slice(1) }}
+                        {{ object.label.charAt(0).toUpperCase() + object.label.slice(1) }}
                     </li>
                 </ul>
                 <ul v-else class="list-group list-group-flush">
