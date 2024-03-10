@@ -6,15 +6,12 @@ import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 
-import App from '@/App.vue';
-import router from '@/router';
+import App from './App.vue';
+import router from './router';
 
 /* add icons to the library */
-import { faFileImport } from '@fortawesome/free-solid-svg-icons';
-import { faBoltLightning } from '@fortawesome/free-solid-svg-icons';
-
-
-library.add(faFileImport, faBoltLightning);
+import { faBoltLightning, faFileImport, faEye } from '@fortawesome/free-solid-svg-icons';
+library.add(faBoltLightning, faEye, faFileImport);
 
 const app = createApp(App);
 
