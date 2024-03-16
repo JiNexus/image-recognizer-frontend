@@ -13,11 +13,13 @@ export default {
         let image = ref();
         let objects = ref();
         let relatedImages = ref();
+        let uniqueLabels = ref();
 
         return {
             image,
             objects,
             relatedImages,
+            uniqueLabels,
         };
     },
     data() {
@@ -26,14 +28,14 @@ export default {
             resizedHeight: 480,
             resizedWidth: 480,
             colors: {
-                black: '0, 0, 0',
-                blue: '0, 0, 255',
-                cyan: '0, 255, 255',
-                green: '0, 255, 0',
-                magenta: '255, 0, 255',
-                red: '255, 0, 0',
-                white: '255, 255, 255',
-                yellow: '255, 255, 0'
+                black: '#000000',
+                blue: '#0000FF',
+                cyan: '#00FFFF',
+                green: '#00FF00',
+                magenta: '#FF00FF',
+                red: '#FF0000',
+                white: '#FFFFFF',
+                yellow: '#FFFF00',
             },
         }
     },
@@ -91,8 +93,6 @@ export default {
                             // Handle successful response
                             this.relatedImages = response.data;
 
-                            console.log(this.relatedImages);
-
                             if (this.relatedImages?._total_items && this.relatedImages?._total_items > 0) {
                                 this.relatedImages?._embedded.images.forEach(async (image: {
                                     url: string; width: number; height: number;
@@ -119,15 +119,31 @@ export default {
                             sketch.image(img, 0, 0, this.resizedWidth, this.resizedHeight);
                         }
 
+                        // Create a Set to store unique labels
+                        const uniqueLabelsSet = new Set();
+
+                        // Loop through the data and add each label to the Set
+                        this.objects.forEach((obj: { label: unknown; }) => {
+                            uniqueLabelsSet.add(obj.label);
+                        });
+
+                        // Convert the Set to an array to get the unique labels
+                        this.uniqueLabels = Array.from(uniqueLabelsSet);
+
+                        const labelColors = await this.getLabelColors();
                         for (let i = 0; i < this.objects.length; i++) {
                             const object = this.objects[i];
 
-                            sketch.stroke(0, 255, 0);
+                            const color = labelColors[object.label] as keyof typeof this.colors;
+                            const rgb = this.colors[color];
+
+                            sketch.stroke(rgb);
                             sketch.strokeWeight(4);
                             sketch.noFill();
                             sketch.rect(object.x, object.y, object.width, object.height);
                             sketch.noStroke();
-                            sketch.fill(255);
+                            sketch.fill(rgb);
+                            sketch.textFont('Courier New');
                             sketch.textSize(24);
                             sketch.text(object.label, object.x + 10, object.y + 24);
                         }
@@ -236,7 +252,18 @@ export default {
                     reject(new Error('Failed to load image'));
                 };
             });
-        }
+        },
+        async getLabelColors() {
+            const labelColors: { [key: string]: string } = {};
+            this.uniqueLabels.forEach((obj: any) => {
+                const colorNames = Object.keys(this.colors);
+                const randomColorName = colorNames[Math.floor(Math.random() * colorNames.length)] as keyof typeof this.colors;
+
+                labelColors[obj] = randomColorName;
+            });
+
+            return labelColors;
+        },
     }
 }
 </script>
@@ -272,9 +299,9 @@ export default {
                 </div>
                 <div class="col-lg-10 mx-auto mb-4">
                     <p class="lead">Objects found:</p>
-                    <ul v-if="objects && objects.length > 0" class="list-group list-group-flush">
-                        <li v-for="(object, index) in objects" :key="index" class="list-group-item">
-                            {{ object.label.charAt(0).toUpperCase() + object.label.slice(1) }}
+                    <ul v-if="uniqueLabels && uniqueLabels.length > 0" class="list-group list-group-flush">
+                        <li v-for="(uniqueLabel, index) in uniqueLabels" :key="index" class="list-group-item">
+                            {{ uniqueLabel.charAt(0).toUpperCase() + uniqueLabel.slice(1) }}
                         </li>
                     </ul>
                     <ul v-else class="list-group list-group-flush">
@@ -301,8 +328,7 @@ export default {
                             </div>
                         </div>
                     </div>
-                    <!-- <div v-else> -->
-                    <div>
+                    <div v-else>
                         <div class="alert alert-primary" role="alert">
                             No related images!
                         </div>
