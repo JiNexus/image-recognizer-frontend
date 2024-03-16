@@ -1,18 +1,23 @@
 <script lang="ts">
+import axios from 'axios';
 import { ref } from 'vue';
 
 declare const p5: any;
 declare const ml5: any
+
+const recursiveApi = import.meta.env.VITE_RECURSIVE_API;
 
 export default {
     name: 'ImageRecognizerForm',
     setup() {
         let image = ref();
         let objects = ref();
+        let relatedImages = ref();
 
         return {
             image,
             objects,
+            relatedImages,
         };
     },
     data() {
@@ -20,8 +25,19 @@ export default {
             imageUrl: 'https://placehold.co/480x480',
             resizedHeight: 480,
             resizedWidth: 480,
+            colors: {
+                black: '0, 0, 0',
+                blue: '0, 0, 255',
+                cyan: '0, 255, 255',
+                green: '0, 255, 0',
+                magenta: '255, 0, 255',
+                red: '255, 0, 0',
+                white: '255, 255, 255',
+                yellow: '255, 255, 0'
+            },
         }
     },
+    mounted() { },
     methods: {
         async clearCanvas(canvasString: string) {
             const canvas = document.getElementById(canvasString) as HTMLCanvasElement;
@@ -61,13 +77,37 @@ export default {
                     sketch.createCanvas(this.resizedWidth, this.resizedHeight);
 
                     // Pass the canvas element to detect
-                    await detector.detect(img, (error: any, result: any) => {
+                    await detector.detect(img, async (error: any, result: any) => {
                         if (error) {
                             console.log(error);
                             return;
                         }
 
                         this.objects = result;
+
+                        const labels = this.objects.map((item: { label: any; }) => item.label);
+                        await axios.get(recursiveApi + 'api/image-related?labels=' + labels.toString())
+                        .then(response => {
+                            // Handle successful response
+                            this.relatedImages = response.data;
+
+                            console.log(this.relatedImages);
+
+                            if (this.relatedImages?._total_items && this.relatedImages?._total_items > 0) {
+                                this.relatedImages?._embedded.images.forEach(async (image: {
+                                    url: string; width: number; height: number;
+                                }) => {
+                                    // Add width and height fields to the image object
+                                    const resizeWidthAndHeight = await this.getResizeWidthAndHeight(image.url, 320, 320);
+                                    image.width = resizeWidthAndHeight.width; // Example width value
+                                    image.height = resizeWidthAndHeight.height; // Example height value
+                                });
+                            }
+                        })
+                        .catch(error => {
+                            // Handle error
+                            console.error('Error fetching data:', error);
+                        });
                     });
                 };
 
@@ -148,13 +188,13 @@ export default {
             const maxHeight = 480;
 
             // Resize the image if the width exceeds the maximum
-            if (this.image.width > this.image.height && this.image.width > maxWidth) {
+            if (this.image.width >= this.image.height && this.image.width > maxWidth) {
                 this.resizedWidth = maxWidth;
                 this.resizedHeight = (maxWidth / this.image.width) * this.image.height;
             }
 
             // Resize the image if the height exceeds the maximum
-            if (this.image.height > this.image.width && this.image.height > maxHeight) {
+            if (this.image.height >= this.image.width && this.image.height > maxHeight) {
                 this.resizedHeight = maxHeight;
                 this.resizedWidth = (maxHeight / this.image.height) * this.image.width;
             }
@@ -166,48 +206,108 @@ export default {
             // Return resized image as data URL
             return canvas;
         },
+        async getResizeWidthAndHeight(url: string, maxWidth: number, maxHeight: number): Promise<any> {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.src = url;
+
+                img.onload = function() {
+                    let resizedWidth = img.width; // Get the width of the loaded image
+                    let resizedHeight = img.height; // Get the height of the loaded image
+
+                    // Resize the image if the width exceeds the maximum
+                    if (img.width >= img.height && img.width > maxWidth) {
+                        resizedWidth = maxWidth;
+                        resizedHeight = (maxWidth / img.width) * img.height;
+                    }
+
+                    // Resize the image if the height exceeds the maximum
+                    if (img.height >= img.width && img.height > maxHeight) {
+                        resizedHeight = maxHeight;
+                        resizedWidth = (maxHeight / img.height) * img.width;
+                    }
+
+                    // Resolve the promise with the resized width and height
+                    resolve({ width: Number(resizedWidth.toFixed(2)), height: Number(resizedHeight.toFixed(2)) });
+                };
+
+                // Handle errors
+                img.onerror = function() {
+                    reject(new Error('Failed to load image'));
+                };
+            });
+        }
     }
 }
 </script>
 
 <template>
-    <div class="row">
-        <div class="col">
-            <div class="col-lg-10 mx-auto mb-4">
-                <picture>
-                    <div id="canvas-input-wrapper" class="img-thumbnail d-flex flex-wrap align-items-center justify-content-center" style="min-height: 480px; min-width: 480px;">
-                        <canvas id="canvas-input" ref="canvas" width="480" height="480"></canvas>
+    <div class="container text-center">
+        <div class="row">
+            <div class="col">
+                <div class="col-lg-10 mx-auto mb-4">
+                    <picture>
+                        <div id="canvas-input-wrapper" class="img-thumbnail d-flex flex-wrap align-items-center justify-content-center" style="min-height: 480px; min-width: 480px;">
+                            <canvas id="canvas-input" ref="canvas" width="480" height="480"></canvas>
+                        </div>
+                    </picture>
+                </div>
+                <div class="col-lg-10 mx-auto mb-2">
+                    <label for="image-file" class="form-label visually-hidden">Image File</label>
+                    <input @change="handleFileChange" class="form-control form-control-lg" id="image-file" type="file" accept="image/*" />
+                </div>
+                <div class="col-lg-10 mx-auto mb-2">
+                    <div class="d-grid gap-2">
+                        <button @click="detect" type="submit" class="btn btn-primary btn-lg px-5 mt-2 mb-2" name="btn-upload">
+                            Detect <font-awesome-icon icon="fa-solid fa-eye" />
+                        </button>
                     </div>
-                </picture>
+                </div>
             </div>
-            <div class="col-lg-10 mx-auto mb-2">
-                <label for="image-file" class="form-label visually-hidden">Image File</label>
-                <input @change="handleFileChange" class="form-control form-control-lg" id="image-file" type="file" accept="image/*" />
-            </div>
-            <div class="col-lg-10 mx-auto mb-2">
-                <div class="d-grid gap-2">
-                    <button @click="detect" type="submit" class="btn btn-primary btn-lg px-5 mt-2 mb-2" name="btn-upload">
-                        Detect <font-awesome-icon icon="fa-solid fa-eye" />
-                    </button>
+            <div class="col">
+                <div class="col-lg-10 mx-auto mb-4">
+                    <picture>
+                        <div id="canvas-output-wrapper" class="img-thumbnail d-flex flex-wrap align-items-center justify-content-center" style="min-height: 480px; min-width: 480px;"></div>
+                    </picture>
+                </div>
+                <div class="col-lg-10 mx-auto mb-4">
+                    <p class="lead">Objects found:</p>
+                    <ul v-if="objects && objects.length > 0" class="list-group list-group-flush">
+                        <li v-for="(object, index) in objects" :key="index" class="list-group-item">
+                            {{ object.label.charAt(0).toUpperCase() + object.label.slice(1) }}
+                        </li>
+                    </ul>
+                    <ul v-else class="list-group list-group-flush">
+                        <li class="list-group-item">Looking for something?</li>
+                    </ul>
                 </div>
             </div>
         </div>
-        <div class="col">
-            <div class="col-lg-10 mx-auto mb-4">
-                <picture>
-                    <div id="canvas-output-wrapper" class="img-thumbnail d-flex flex-wrap align-items-center justify-content-center" style="min-height: 480px; min-width: 480px;"></div>
-                </picture>
-            </div>
-            <div class="col-lg-10 mx-auto mb-4">
-                <p class="lead">Objects found:</p>
-                <ul v-if="objects && objects.length > 0" class="list-group list-group-flush">
-                    <li v-for="(object, index) in objects" :key="index" class="list-group-item">
-                        {{ object.label.charAt(0).toUpperCase() + object.label.slice(1) }}
-                    </li>
-                </ul>
-                <ul v-else class="list-group list-group-flush">
-                    <li class="list-group-item">Looking for something?</li>
-                </ul>
+        <div class="row">
+            <div class="col">
+                <div class="col-lg-11 mx-auto mb-4" ref="refRelatedImages">
+                    <div v-if="relatedImages?._total_items && relatedImages?._total_items > 0" class="row justify-content-center g-3">
+                        <div v-for="(image, index) in relatedImages?._embedded?.images" :key="index" class="col-4">
+                            <picture>
+                                <div
+                                    class="img-thumbnail img-thumbnail d-flex flex-wrap align-items-center justify-content-center mb-1"
+                                    style="min-height: 350px; min-width: 350px;"
+                                >
+                                    <img :src="image.url" :alt="image.slug" :height="image.height + 'px'" :width="image.width + 'px'">
+                                </div>
+                            </picture>
+                            <div class="alert alert-info" role="alert">
+                                <p class="m-0">{{ image.label.charAt(0).toUpperCase() + image.label.slice(1) }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- <div v-else> -->
+                    <div>
+                        <div class="alert alert-primary" role="alert">
+                            No related images!
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
