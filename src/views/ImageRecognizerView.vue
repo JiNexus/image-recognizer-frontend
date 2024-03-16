@@ -29,11 +29,10 @@ export default {
                 </div>
                 <h1 class="text-body-emphasis">Image Recognizer</h1>
                 <p class="col-lg-8 mx-auto mb-5">
-                    Utilizes TensorFlow machine learning object detection model that aims to localize and identify multiple objects in a single image.
+                    Utilizes ML5 - machine learning object detection model that aims to localize and identify multiple objects in a single image.
                 </p>
                 <ImageRecognizer />
             </div>
-
         </div>
     </section>
 </template>
