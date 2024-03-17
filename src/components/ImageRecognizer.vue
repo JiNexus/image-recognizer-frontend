@@ -89,7 +89,7 @@ export default {
 
                         this.objects = result;
 
-                        const labels = this.objects.map((item: { label: any; }) => item.label);
+                        const labels = this.uniqueLabels.map((item: { label: any; }) => item.label);
                         await axios.get(recursiveApi + 'api/image-related?labels=' + labels.toString())
                         .then(response => {
                             // Handle successful response
