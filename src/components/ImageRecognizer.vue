@@ -89,8 +89,18 @@ export default {
 
                         this.objects = result;
 
-                        const labels = this.uniqueLabels.map((item: { label: any; }) => item.label);
-                        await axios.get(recursiveApi + 'api/image-related?labels=' + labels.toString())
+                        // Create a Set to store unique labels
+                        const uniqueLabelsSet = new Set();
+
+                        // Loop through the data and add each label to the Set
+                        this.objects.forEach((obj: { label: unknown; }) => {
+                            uniqueLabelsSet.add(obj.label);
+                        });
+
+                        // Convert the Set to an array to get the unique labels
+                        this.uniqueLabels = Array.from(uniqueLabelsSet);
+
+                        await axios.get(recursiveApi + 'api/image-related?labels=' + this.uniqueLabels.toString())
                         .then(response => {
                             // Handle successful response
                             this.relatedImages = response.data;
@@ -120,17 +130,6 @@ export default {
                         if (img) {
                             sketch.image(img, 0, 0, this.resizedWidth, this.resizedHeight);
                         }
-
-                        // Create a Set to store unique labels
-                        const uniqueLabelsSet = new Set();
-
-                        // Loop through the data and add each label to the Set
-                        this.objects.forEach((obj: { label: unknown; }) => {
-                            uniqueLabelsSet.add(obj.label);
-                        });
-
-                        // Convert the Set to an array to get the unique labels
-                        this.uniqueLabels = Array.from(uniqueLabelsSet);
 
                         const labelColors = await this.getLabelColors();
                         for (let i = 0; i < this.objects.length; i++) {
