@@ -37,6 +37,7 @@ export default {
                 white: '#FFFFFF',
                 yellow: '#FFFF00',
             },
+            isLoading: false,
         }
     },
     mounted() { },
@@ -67,7 +68,15 @@ export default {
             this.relatedImages = null;
             this.uniqueLabels = new Array();
         },
+        async refreshCanvasOutputWrapper() {
+            const canvasOutputWrapper = document.getElementById('canvas-output-wrapper');
+            canvasOutputWrapper?.replaceChildren();
+        },
         async detect() {
+            this.isLoading = true;
+
+            this.refreshCanvasOutputWrapper();
+
             new p5((sketch: any) => {
                 let img: HTMLElement | null;
                 let detector: any;
@@ -115,10 +124,14 @@ export default {
                                     image.height = resizeWidthAndHeight.height; // Example height value
                                 });
                             }
+
+                            this.isLoading = false;
                         })
                         .catch(error => {
                             // Handle error
                             console.error('Error fetching data:', error);
+
+                            this.isLoading = false;
                         });
                     });
                 };
@@ -282,12 +295,14 @@ export default {
                 </div>
                 <div class="col-lg-10 mx-auto mb-2">
                     <label for="image-file" class="form-label visually-hidden">Image File</label>
-                    <input @change="handleFileChange" class="form-control form-control-lg" id="image-file" type="file" accept="image/*" />
+                    <input @change="handleFileChange" :disabled="isLoading" class="form-control form-control-lg" id="image-file" type="file" accept="image/*" />
                 </div>
                 <div class="col-lg-10 mx-auto mb-2">
                     <div class="d-grid gap-2">
-                        <button @click="detect" type="submit" class="btn btn-primary btn-lg px-5 mt-2 mb-2" name="btn-upload">
-                            Detect <font-awesome-icon icon="fa-solid fa-eye" />
+                        <button @click="detect" :disabled="isLoading" type="submit" class="btn btn-primary btn-lg px-5 mt-2 mb-2" name="btn-upload">
+                            Detect
+                            <font-awesome-icon v-if="! isLoading" icon="fa-solid fa-eye" />
+                            <span v-else class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                         </button>
                     </div>
                 </div>
