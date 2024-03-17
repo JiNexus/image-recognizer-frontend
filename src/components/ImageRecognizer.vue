@@ -64,6 +64,8 @@ export default {
         },
         async clearObjects() {
             this.objects = new Array();
+            this.relatedImages = null;
+            this.uniqueLabels = new Array();
         },
         async detect() {
             new p5((sketch: any) => {
